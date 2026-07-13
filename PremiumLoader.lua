@@ -63,9 +63,7 @@ local Config = {
     ProgressTargets   = {0, 3, 8, 15, 25, 39, 52, 67, 81, 94, 100},
 }
 
-local V2=Vector2.new
-local C3r=Color3.fromRGB
-local C3n=Color3.new
+local V=Vector2.new
 
 -- ============================================================================
 -- TEXT DATA
@@ -150,7 +148,7 @@ local state = {
     finishTimer   = 0,
     finished      = false,
 
-    menuPhase=0,menuCreated=false,mPos=V2(0,0),mD=false,mC=false,
+    mP=0,mC=false,mo=V2(0,0),md=false,mc=false,
     -- Notification
     notif = {
         active = false,
@@ -715,7 +713,6 @@ function FinishLoading()
     if state.finished then return end
     state.finished = true
     state.finishing = true
-    state.menuPhase = 1
     state.finishTimer = 0
     state.progress = 100
 
@@ -762,11 +759,11 @@ end
 -- ============================================================================
 
 local function DLO()
- local kp={bg=true,bgOverlay=true,grads=true,bokehs=true,glowCircles=true,neonLines=true,neonGlows=true,particles=true,dust=true,rays=true}
- for k,o in pairs(D)do
-  if not kp[k]then
-   if type(o)=="table"then for _,s in pairs(o)do pcall(function()s:Destroy()end)end else pcall(function()o:Destroy()end)end
-   D[k]=nil
+ local k={bg=1,bgOverlay=1,grads=1,bokehs=1,glowCircles=1,neonLines=1,neonGlows=1,particles=1,dust=1,rays=1}
+ for kk,oo in pairs(D)do
+  if not k[kk]then
+   if type(oo)=="table"then for _,s in pairs(oo)do pcall(function()s:Destroy()end)end else pcall(function()oo:Destroy()end)end
+   D[kk]=nil
   end
  end
 end
@@ -961,14 +958,15 @@ function UpdateFrame(dt)
             end
 
             if fp >= 1 then
-                state.menuPhase = 2
+                state.running = false
             end
         end
     end
 
+    mP=0,mC=false,mo=V2(0,0),md=false,mc=false,
     -- Notification animation
-    if state.notif and state.notif.active then
-        local n = state.notif
+    if state.notification.active then
+        local n = state.notification
         n.timer = n.timer + dt
 
         if n.slide < 1 then
@@ -1035,147 +1033,101 @@ function AnimateIntro()
     state.introDone = true
 end
 
+-- ============================================================================
 
 -- MENU
-local M,S={},{v=false,a=0,tb="Home",w=V2(CX-240,CY-170),sw=70,sa=70,dr=false,df=V2(0,0),tg={},tm=0,si={}}
-local wx=function()return S.w.X end;local wy=function()return S.w.Y end
-local function mk(k,t,p)local o=Drawing.new(t);for kk,vv in pairs(p)do o[kk]=vv end;M[k]=o;return o end
-local function R(k,p)return mk(k,"Square",p)end
-local function T(k,p)return mk(k,"Text",p)end
-local function C(k,p)return mk(k,"Circle",p)end
-local function pt(x,y,rx,ry,rw,rh)return x>=rx and x<=rx+rw and y>=ry and y<=ry+rh end
+local M={}
+local MS={v=0,t="Home",w=V(CX-240,CY-170),m={},si={}}
 
-function InitW()
- local x,y,w,h=wx(),wy(),480,340;local s=S.sw
- R("ws",{Size=V2(w+8,h+8),Position=V2(x-4,y-4),Color=C3n(0,0,0),Transparency=0.85,Visible=false,ZIndex=20})
- R("wb",{Size=V2(w,h),Position=V2(x,y),Color=C3r(6,8,22),Transparency=0.08,Visible=false,ZIndex=21})
- R("wd",{Size=V2(w,h),Position=V2(x,y),Color=C3r(30,35,60),Transparency=0.55,Visible=false,ZIndex=22,Thickness=1})
- R("wg",{Size=V2(w+12,h+12),Position=V2(x-6,y-6),Color=Theme.Primary,Transparency=0.92,Visible=false,ZIndex=19})
- R("sb",{Size=V2(s,h),Position=V2(x,y),Color=C3r(8,10,24),Transparency=0.12,Visible=false,ZIndex=25})
- R("sd",{Size=V2(1,h-10),Position=V2(x+s-1,y+5),Color=Theme.Primary,Transparency=0.8,Visible=false,ZIndex=26})
-end
+-- helpers
+local function D(k,t,p)local o=Drawing.new(t);for kk,vv in pairs(p)do o[kk]=vv end;M[k]=o;return o end
+local function R(k,p)return D(k,"Square",p)end
+local function T(k,p)return D(k,"Text",p)end
 
-function InitSB()
- local x,y=wx(),wy();local s=S.sw
- local it={{"H","Home"},{">","Main"},{"!","Player"},{"*","Settings"},{"i","About"}}
- for i=1,5 do
-  local iy=y+48+(i-1)*38;local v=it[i];S.si[i]={n=v[2],ha=0,aa=0}
-  R("s"..i.."b",{Size=V2(s-4,34),Position=V2(x+2,iy+2),Color=C3r(20,25,50),Transparency=1,Visible=false,ZIndex=26})
-  R("s"..i.."a",{Size=V2(3,30),Position=V2(x+1,iy+4),Color=Theme.Primary,Transparency=1,Visible=false,ZIndex=27})
-  T("s"..i.."i",{Text=v[1],Size=18,Position=V2(x+s/2,iy+19),Color=C3r(170,178,210),Transparency=1,Visible=false,ZIndex=28,Center=true})
-  T("s"..i.."l",{Text=v[2],Size=13,Position=V2(x+s+12,iy+19),Color=C3r(170,178,210),Transparency=1,Visible=false,ZIndex=28})
- end
-end
-
-function InitHD()
- local x,y,w=wx(),wy(),480;local s,hh=S.sw,40
- R("hb",{Size=V2(w-s,hh),Position=V2(x+s,y),Color=C3r(10,12,28),Transparency=0.15,Visible=false,ZIndex=30})
- R("hd",{Size=V2(w-s-20,1),Position=V2(x+s+10,y+hh),Color=Theme.Primary,Transparency=0.85,Visible=false,ZIndex=30})
- T("ht",{Text="Hansz Hub",Size=16,Position=V2(x+s+14,y+hh/2),Color=Theme.White,Transparency=1,Visible=false,ZIndex=31})
- T("hs",{Text="Premium",Size=10,Position=V2(x+s+100,y+hh/2),Color=Theme.Gray,Transparency=1,Visible=false,ZIndex=31})
-end
-
-function MC(pk,x,y,w,h,ft)
- local cw,ch,g=(w-15)/2,70,10
- for i=1,#ft do
-  local co,ro=(i-1)%2,math.floor((i-1)/2);local cx,cy=x+co*(cw+g),y+ro*(ch+g);local f=ft[i];local d=pk..i
-  R(d.."b",{Size=V2(cw,ch),Position=V2(cx,cy),Color=C3r(14,18,38),Transparency=0.2,Visible=false,ZIndex=45})
-  R(d.."r",{Size=V2(cw,ch),Position=V2(cx,cy),Color=C3r(30,35,60),Transparency=0.6,Visible=false,ZIndex=46,Thickness=1})
-  T(d.."i",{Text=f[1],Size=20,Position=V2(cx+22,cy+ch/2-6),Color=C3r(96,165,250),Transparency=1,Visible=false,ZIndex=47,Center=true})
-  T(d.."n",{Text=f[2],Size=13,Position=V2(cx+48,cy+18),Color=Theme.White,Transparency=1,Visible=false,ZIndex=47})
-  T(d.."d",{Text=f[3],Size=10,Position=V2(cx+48,cy+38),Color=C3r(110,118,155),Transparency=1,Visible=false,ZIndex=47})
-  T(d.."g",{Text=f[4]and"ON"or"OFF",Size=10,Position=V2(cx+cw-16,cy+ch/2),Color=f[4]and Theme.Success or C3r(80,80,80),Transparency=1,Visible=false,ZIndex=47,Center=true})
-  local tk=pk..f[2]
-  if S.tg[tk]==nil then S.tg[tk]={on=false}end
-  S.tg[tk].k=tk;S.tg[tk].d=d.."g";S.tg[tk].ax=cx+cw-31;S.tg[tk].ay=cy+ch/2-7
- end
-end
-
-function CH(x,y,w,h)
- T("h0",{Text="Welcome Back,",Size=22,Position=V2(x+w/2,y+20),Color=Theme.White,Transparency=1,Visible=false,ZIndex=40,Center=true})
- T("h1",{Text="Hansz Hub Ready",Size=14,Position=V2(x+w/2,y+42),Color=Theme.PrimaryLight,Transparency=1,Visible=false,ZIndex=40,Center=true})
- local st={{"V","Executor",Theme.Success},{"V","Loaded",Theme.Success},{"V","UI",Theme.Success},{"V","Secure",Theme.Success}}
- local cw,ch=(w-30)/2,36
+-- create window
+local function IW()
+ local x,y,w,h=MS.w.X,MS.w.Y,480,340
+ R("a",{Size=V(w+8,h+8),Position=V(x-4,y-4),Color=C3n(0,0,0),Transparency=0.85,Visible=false,ZIndex=20})
+ R("b",{Size=V(w,h),Position=V(x,y),Color=C3r(6,8,22),Transparency=0.08,Visible=false,ZIndex=21})
+ R("c",{Size=V(w,h),Position=V(x,y),Color=C3r(30,35,60),Transparency=0.55,Visible=false,ZIndex=22,Thickness=1})
+ R("d",{Size=V(w+12,h+12),Position=V(x-6,y-6),Color=Theme.Primary,Transparency=0.92,Visible=false,ZIndex=19})
+ R("e",{Size=V(70,h),Position=V(x,y),Color=C3r(8,10,24),Transparency=0.12,Visible=false,ZIndex=25})
+ R("f",{Size=V(1,h-10),Position=V(x+69,y+5),Color=Theme.Primary,Transparency=0.8,Visible=false,ZIndex=26})
+ R("g",{Size=V(w-70,40),Position=V(x+70,y),Color=C3r(10,12,28),Transparency=0.15,Visible=false,ZIndex=30})
+ R("h",{Size=V(w-90,1),Position=V(x+80,y+40),Color=Theme.Primary,Transparency=0.85,Visible=false,ZIndex=30})
+ T("i",{Text="Hansz Hub",Size=16,Position=V(x+84,y+20),Color=Theme.White,Transparency=1,Visible=false,ZIndex=31})
+ T("j",{Text="Premium",Size=10,Position=V(x+170,y+20),Color=Theme.Gray,Transparency=1,Visible=false,ZIndex=31})
+ local it={{"H","Home"},{"=","Main"},{"*","Stngs"},{"i","Info"}}
  for i=1,4 do
-  local co,ro=(i-1)%2,math.floor((i-1)/2);local cx,cy=x+5+co*(cw+10),y+62+ro*(ch+8)
-  R("h"..i.."b",{Size=V2(cw,ch),Position=V2(cx,cy),Color=C3r(14,18,38),Transparency=0.2,Visible=false,ZIndex=40})
-  R("h"..i.."r",{Size=V2(cw,ch),Position=V2(cx,cy),Color=C3r(30,35,60),Transparency=0.6,Visible=false,ZIndex=41,Thickness=1})
-  T("h"..i.."n",{Text=st[i][1].." "..st[i][2],Size=13,Position=V2(cx+cw/2,cy+ch/2),Color=st[i][3],Transparency=1,Visible=false,ZIndex=42,Center=true})
+  local iy=y+48+(i-1)*38;local v=it[i]
+  MS.si[i]={n=v[2]}
+  R("k"..i,{Size=V(66,34),Position=V(x+2,iy+2),Color=C3r(20,25,50),Transparency=1,Visible=false,ZIndex=26})
+  R("l"..i,{Size=V(3,30),Position=V(x+1,iy+4),Color=Theme.Primary,Transparency=1,Visible=false,ZIndex=27})
+  T("m"..i,{Text=v[1],Size=18,Position=V(x+35,iy+19),Color=C3r(170,178,210),Transparency=1,Visible=false,ZIndex=28,Center=true})
+  T("n"..i,{Text=v[2],Size=12,Position=V(x+82,iy+19),Color=C3r(170,178,210),Transparency=1,Visible=false,ZIndex=28})
  end
 end
 
-function CA(x,y,w,h)
- T("a0",{Text="Hansz Hub",Size=24,Position=V2(x+w/2,y+28),Color=Theme.White,Transparency=1,Visible=false,ZIndex=55,Center=true})
- T("a1",{Text="Premium v2.0",Size=13,Position=V2(x+w/2,y+55),Color=Theme.PrimaryLight,Transparency=1,Visible=false,ZIndex=55,Center=true})
- T("a2",{Text="by Hansz Hub Team",Size=11,Position=V2(x+w/2,y+78),Color=Theme.Gray,Transparency=1,Visible=false,ZIndex=55,Center=true})
+-- home page
+local function IH()
+ local x,y=MS.w.X,MS.w.Y;local px,py=x+80,y+48
+ T("o",{Text="Welcome!",Size=22,Position=V(px+165,py+12),Color=Theme.White,Transparency=1,Visible=false,ZIndex=40,Center=true})
+ T("p",{Text="Hansz Hub Ready",Size=14,Position=V(px+165,py+34),Color=Theme.PrimaryLight,Transparency=1,Visible=false,ZIndex=40,Center=true})
 end
 
-function SW(t)
- S.tb=t;  local p={Home={"h0","h1","h1b","h1r","h2b","h2r","h3b","h3r","h4b","h4r","h1n","h2n","h3n","h4n"},Main="M",Player="P",Settings="S",About={"a0","a1","a2"}}
+-- switch tab
+local function SW(t)
+ MS.t=t
  for k,o in pairs(M)do if type(o)=="userdata"then o.Visible=false end end
- for _,k in ipairs({"ws","wb","wd","wg","sb","sd","hb","hd","ht","hs"})do if M[k]then M[k].Visible=true end end
- for i=1,5 do for _,s in ipairs({"b","a","i","l"})do if M["s"..i..s]then M["s"..i..s].Visible=true end end end
- local v=p[t]
- if type(v)=="table"then for _,k in ipairs(v)do if M[k]then M[k].Visible=true end end
- else for k,o in pairs(M)do if type(o)=="userdata"and k:sub(1,1)==v then o.Visible=true end end end
+ for _,k in ipairs{"a","b","c","d","e","f","g","h","i","j"}do if M[k]then M[k].Visible=true end end
+ for i=1,4 do for _,s in ipairs{"k","l","m","n"}do if M[s..i]then M[s..i].Visible=true end end end
+ if t=="Home"then for _,k in ipairs{"o","p"}do if M[k]then M[k].Visible=true end end end
 end
 
-function TG(k)
- local ts=S.tg[k];if not ts then return end;ts.on=not ts.on
- if M[ts.d]then M[ts.d].Text=ts.on and"ON"or"OFF";M[ts.d].Color=ts.on and Theme.Success or C3r(80,80,80)end
-end
-
-function SI()
+-- input
+local function SI()
  local ok,u=pcall(function()return game:GetService("UserInputService")end)
  if not ok then return end
- u.InputBegan:Connect(function(i,g)if g then return end;if i.UserInputType==Enum.UserInputType.MouseButton1 then state.mC=true end end)
- u.InputEnded:Connect(function(i,g)if g then return end;if i.UserInputType==Enum.UserInputType.MouseButton1 then state.mD=false;S.dr=false end end)
- u.InputChanged:Connect(function(i,g)if g then return end;if i.UserInputType==Enum.UserInputType.MouseMovement then state.mPos=u:GetMouseLocation()end end)
+ u.InputBegan:Connect(function(i,g)if g then return end;if i.UserInputType==Enum.UserInputType.MouseButton1 then state.mc=true end end)
+ u.InputEnded:Connect(function(i,g)if g then return end;if i.UserInputType==Enum.UserInputType.MouseButton1 then state.md=false end end)
+ u.InputChanged:Connect(function(i,g)if g then return end;if i.UserInputType==Enum.UserInputType.MouseMovement then state.mo=u:GetMouseLocation()end end)
 end
 
-function HC()
- if not S.v then return end;local mx,my=state.mPos.X,state.mPos.Y
- local x,y,w,h=wx(),wy(),480,340;local s,hh=S.sw,40
- if pt(mx,my,x+s,y,w-s,hh)then S.dr=true;S.df=V2(mx-x,my-y)return end
- for i=1,5 do local iy=y+48+(i-1)*38;if pt(mx,my,x+2,iy+2,s-4,34)then SW(S.si[i].n)return end end
-  for _,ts in pairs(S.tg)do local tx=ts.ax or 0;local ty=ts.ay or 0;if pt(mx,my,tx,ty,30,14)then TG(ts.k)return end end
+-- click
+local function HC()
+ if MS.v==0 then return end
+ local mx,my=state.mo.X,state.mo.Y
+ local x,y=MS.w.X,MS.w.Y
+ for i=1,4 do local iy=y+48+(i-1)*38;if mx>=x+2 and mx<=x+68 and my>=iy+2 and my<=iy+36 then SW(MS.si[i].n)return end end
 end
 
-function HD()
- if not S.dr then return end;local mx,my=state.mPos.X,state.mPos.Y;local d=S.df
- S.w=V2(clamp(mx-d.X,10,CX*2-490),clamp(my-d.Y,10,CY*2-350))
-end
-
-function UP()
- local x,y,w,h=wx(),wy(),480,340;local s,hh=S.sw,40
- if M.ws then M.ws.Position=V2(x-4,y-4)end
- if M.wb then M.wb.Position=V2(x,y)end
- if M.wd then M.wd.Position=V2(x,y)end
- if M.wg then M.wg.Position=V2(x-6,y-6);M.wg.Transparency=0.9+math.sin(S.tm*0.5)*0.03 end
- if M.sb then M.sb.Position=V2(x,y);M.sb.Size=V2(s,h)end
- if M.sd then M.sd.Position=V2(x+s-1,y+5)end
- for i=1,5 do local iy=y+48+(i-1)*38
-  if M["s"..i.."b"]then M["s"..i.."b"].Position=V2(x+2,iy+2);M["s"..i.."b"].Size=V2(s-4,34)end
-  if M["s"..i.."a"]then M["s"..i.."a"].Position=V2(x+1,iy+4)end
-  if M["s"..i.."i"]then M["s"..i.."i"].Position=V2(x+s/2,iy+19)end
-  if M["s"..i.."l"]then M["s"..i.."l"].Position=V2(x+s+12,iy+19)end
+-- update pos
+local function UP()
+ local x,y=MS.w.X,MS.w.Y
+ if M.a then M.a.Position=V(x-4,y-4)end
+ if M.b then M.b.Position=V(x,y)end
+ if M.c then M.c.Position=V(x,y)end
+ if M.d then M.d.Position=V(x-6,y-6);M.d.Transparency=0.9+math.sin(MS.tm*0.5)*0.03 end
+ if M.e then M.e.Position=V(x,y);M.e.Size=V(70,340)end
+ if M.f then M.f.Position=V(x+69,y+5)end
+ if M.g then M.g.Position=V(x+70,y);M.g.Size=V(410,40)end
+ if M.h then M.h.Position=V(x+80,y+40)end
+ if M.i then M.i.Position=V(x+84,y+20)end
+ if M.j then M.j.Position=V(x+170,y+20)end
+ for i=1,4 do local iy=y+48+(i-1)*38
+  if M["k"..i]then M["k"..i].Position=V(x+2,iy+2)end
+  if M["l"..i]then M["l"..i].Position=V(x+1,iy+4)end
+  if M["m"..i]then M["m"..i].Position=V(x+35,iy+19)end
+  if M["n"..i]then M["n"..i].Position=V(x+82,iy+19)end
  end
- if M.hb then M.hb.Position=V2(x+s,y)end
- if M.hd then M.hd.Position=V2(x+s+10,y+hh)end
- if M.ht then M.ht.Position=V2(x+s+14,y+hh/2)end
- if M.hs then M.hs.Position=V2(x+s+100,y+hh/2)end
+ if M.o then M.o.Position=V(x+245,y+60)end
+ if M.p then M.p.Position=V(x+245,y+82)end
 end
 
-function SMM()
- DLO()
- InitW();InitSB();InitHD()
- local x,y,w,h=wx(),wy(),480,340;local s,hh=S.sw,40;local px,py,pw,ph=x+s+10,y+hh+8,w-s-20,h-hh-36
- CH(px,py,pw,ph)
- MC("M",px,py,pw,ph,{{"Z","Farm","Auto",false},{"=","Sell","Auto sell",false},{">","Upgrade","",false},{"@","ESP","See",false}})
- MC("P",px,py,pw,ph,{{"!","Speed","Walk fast",false},{"@","God","Immortal",false},{">","Jump","High",false},{"#","Noclip","No clip",false}})
- MC("S",px,py,pw,ph,{{"*","Theme","Dark mode",false},{">","Anim","Speed",false},{"!","Blur","Bg blur",false},{"@","Notif","On/off",false}})
- CA(px,py,pw,ph)
- S.v=true
+-- main loop
+local function SMM()
+ DLO();IW();IH()
+ SW("Home");SI();MS.v=1
  for _,v in pairs(M)do if type(v)=="userdata"then pcall(function()v.Visible=true end)end end
  local t=0
  while t<0.5 do
@@ -1183,14 +1135,12 @@ function SMM()
   for _,v in pairs(M)do if type(v)=="userdata"and v.Transparency~=nil then v.Transparency=1-p end end
  end
  for _,v in pairs(M)do if type(v)=="userdata"and v.Transparency~=nil then v.Transparency=0 end end
- SW("Home");SI()
  while true do
-  local dt=task.wait(1/60);S.tm=S.tm+dt
-  if state.mC then state.mC=false;HC()end
-  HD();UP()
+  local dt=task.wait(1/60)
+  if state.mc then state.mc=false;HC()end
+  UP()
  end
 end
--- ============================================================================
 -- MAIN EXECUTION
 -- ============================================================================
 CreateLoader()
@@ -1205,13 +1155,13 @@ while state.running do
     end
     UpdateFrame(dt)
 
-    if state.menuPhase == 2 and not state.menuCreated then
-        state.menuCreated = true
+    if state.mP == 2 and not state.mC then
+        state.mC = true
         break
     end
 end
 
-if state.menuCreated then
+if state.mC then
     task.wait(0.3)
     SMM()
 else
