@@ -63,58 +63,9 @@ local Config = {
     ProgressTargets   = {0, 3, 8, 15, 25, 39, 52, 67, 81, 94, 100},
 }
 
--- ============================================================================
--- MENU CONFIG
--- ============================================================================
-local MenuConfig = {
-    WindowWidth     = 480,
-    WindowHeight    = 340,
-    SidebarWidth    = 70,
-    SidebarExpanded = 180,
-    CornerRadius    = 12,
-    BlurAmount      = 0.52,
-    AnimationSpeed  = 3.0,
-    TransitionTime  = 0.6,
-    BounceStrength  = 1.70158,
-    NotifDuration   = 3.5,
-    NotifWidth      = 220,
-}
-
--- ============================================================================
--- ANIMATION CONFIG
--- ============================================================================
-local AnimationConfig = {
-    FadeSpeed     = 3.0,
-    ScaleSpeed    = 4.0,
-    SlideSpeed    = 3.5,
-    SpringSpeed   = 5.0,
-    SpringDamping = 0.85,
-    GlowPulse     = 0.7,
-    SmoothEase    = 0.15,
-}
-
--- ============================================================================
--- MENU THEME EXTENSION
--- ============================================================================
-local MTheme = {
-    SidebarBg      = Color3.fromRGB(8, 10, 24),
-    SidebarHover   = Color3.fromRGB(20, 25, 50),
-    SidebarActive  = Color3.fromRGB(59, 130, 246),
-    CardBg         = Color3.fromRGB(14, 18, 38),
-    CardBorder     = Color3.fromRGB(30, 35, 60),
-    CardGlow       = Color3.fromRGB(59, 130, 246),
-    ToggleBg       = Color3.fromRGB(30, 35, 55),
-    ToggleActive   = Color3.fromRGB(59, 130, 246),
-    ToggleKnob     = Color3.fromRGB(220, 225, 240),
-    HeaderBg       = Color3.fromRGB(10, 12, 28),
-    FooterBg       = Color3.fromRGB(8, 10, 22),
-    ScrollbarBg    = Color3.fromRGB(25, 28, 50),
-    ScrollbarThumb = Color3.fromRGB(59, 130, 246),
-    SearchBg       = Color3.fromRGB(12, 15, 32),
-    StatusGreen    = Color3.fromRGB(34, 197, 94),
-    StatusYellow   = Color3.fromRGB(234, 179, 8),
-    StatusRed      = Color3.fromRGB(239, 68, 68),
-}
+local V2=Vector2.new
+local C3r=Color3.fromRGB
+local C3n=Color3.new
 
 -- ============================================================================
 -- TEXT DATA
@@ -199,6 +150,7 @@ local state = {
     finishTimer   = 0,
     finished      = false,
 
+    menuPhase=0,menuCreated=false,mPos=V2(0,0),mD=false,mC=false,
     -- Notification
     notif = {
         active = false,
@@ -206,15 +158,6 @@ local state = {
         slide  = 0,
         alpha  = 0,
     },
-
-    -- Menu state
-    menuPhase      = 0,  -- 0=none, 1=transition, 2=ready
-    menuCreated    = false,
-    menuRunning    = false,
-    mousePos       = Vector2.new(0, 0),
-    mouseDown      = false,
-    mouseClicked   = false,
-    mouseButton    = 0,
 }
 
 for _ = 1, Config.StatusCount do
@@ -815,32 +758,19 @@ function ShowNotification()
 end
 
 -- ============================================================================
--- DESTROY LOADING ONLY (keep background for menu)
--- ============================================================================
-local function DestroyLoadingOnly()
-    local keepKeys = {
-        bg=true, bgOverlay=true, grads=true, bokehs=true,
-        glowCircles=true, neonLines=true, neonGlows=true,
-        particles=true, dust=true, rays=true,
-    }
-    for k, obj in pairs(D) do
-        if keepKeys[k] then
-            -- keep background elements for menu
-        elseif type(obj) == "table" then
-            for _, sub in pairs(obj) do
-                pcall(function() sub:Destroy() end)
-            end
-            D[k] = nil
-        else
-            pcall(function() obj:Destroy() end)
-            D[k] = nil
-        end
-    end
-end
-
--- ============================================================================
 -- DESTROY LOADER
 -- ============================================================================
+
+local function DLO()
+ local kp={bg=true,bgOverlay=true,grads=true,bokehs=true,glowCircles=true,neonLines=true,neonGlows=true,particles=true,dust=true,rays=true}
+ for k,o in pairs(D)do
+  if not kp[k]then
+   if type(o)=="table"then for _,s in pairs(o)do pcall(function()s:Destroy()end)end else pcall(function()o:Destroy()end)end
+   D[k]=nil
+  end
+ end
+end
+
 function DestroyLoader()
     for _, obj in pairs(D) do
         if type(obj) == "table" then
@@ -1105,743 +1035,161 @@ function AnimateIntro()
     state.introDone = true
 end
 
--- ============================================================================
--- MAIN MENU - Hansz Hub Premium UI
--- ============================================================================
 
--- Menu Drawing table
-local M = {}
+-- MENU
+local M,S={},{v=false,a=0,tb="Home",w=V2(CX-240,CY-170),sw=70,sa=70,dr=false,df=V2(0,0),tg={},tm=0,si={}}
+local wx=function()return S.w.X end;local wy=function()return S.w.Y end
+local function mk(k,t,p)local o=Drawing.new(t);for kk,vv in pairs(p)do o[kk]=vv end;M[k]=o;return o end
+local function R(k,p)return mk(k,"Square",p)end
+local function T(k,p)return mk(k,"Text",p)end
+local function C(k,p)return mk(k,"Circle",p)end
+local function pt(x,y,rx,ry,rw,rh)return x>=rx and x<=rx+rw and y>=ry and y<=ry+rh end
 
--- Menu state
-local MenuSt = {
-    visible = false, alpha = 0, scale = 0, bounce = 0, glowAlpha = 0,
-    activeTab = "Home",
-    sidebarHover = false, sidebarHoverItem = nil, sidebarHoverTimer = 0,
-    sidebarWidth = MenuConfig.SidebarWidth, sidebarTargetWidth = MenuConfig.SidebarWidth,
-    sidebarAnimatedWidth = MenuConfig.SidebarWidth,
-    windowPos = Vector2.new(CX - MenuConfig.WindowWidth / 2, CY - MenuConfig.WindowHeight / 2),
-    windowSize = Vector2.new(MenuConfig.WindowWidth, MenuConfig.WindowHeight),
-    dragging = false, dragOffset = Vector2.new(0, 0),
-    toggles = {}, notifs = {}, time = 0,
-}
-MenuSt.sidebarTargetWidth = MenuConfig.SidebarWidth
-
--- Helpers
-local function PtIn(px, py, rx, ry, rw, rh)
-    return px >= rx and px <= rx + rw and py >= ry and py <= ry + rh
+function InitW()
+ local x,y,w,h=wx(),wy(),480,340;local s=S.sw
+ R("ws",{Size=V2(w+8,h+8),Position=V2(x-4,y-4),Color=C3n(0,0,0),Transparency=0.85,Visible=false,ZIndex=20})
+ R("wb",{Size=V2(w,h),Position=V2(x,y),Color=C3r(6,8,22),Transparency=0.08,Visible=false,ZIndex=21})
+ R("wd",{Size=V2(w,h),Position=V2(x,y),Color=C3r(30,35,60),Transparency=0.55,Visible=false,ZIndex=22,Thickness=1})
+ R("wg",{Size=V2(w+12,h+12),Position=V2(x-6,y-6),Color=Theme.Primary,Transparency=0.92,Visible=false,ZIndex=19})
+ R("sb",{Size=V2(s,h),Position=V2(x,y),Color=C3r(8,10,24),Transparency=0.12,Visible=false,ZIndex=25})
+ R("sd",{Size=V2(1,h-10),Position=V2(x+s-1,y+5),Color=Theme.Primary,Transparency=0.8,Visible=false,ZIndex=26})
 end
 
-local function MRect(k, p)
-    M[k] = Drawing.new("Square")
-    for kk, vv in pairs(p) do M[k][kk] = vv end
-    return M[k]
+function InitSB()
+ local x,y=wx(),wy();local s=S.sw
+ local it={{"H","Home"},{">","Main"},{"!","Player"},{"*","Settings"},{"i","About"}}
+ for i=1,5 do
+  local iy=y+48+(i-1)*38;local v=it[i];S.si[i]={n=v[2],ha=0,aa=0}
+  R("s"..i.."b",{Size=V2(s-4,34),Position=V2(x+2,iy+2),Color=C3r(20,25,50),Transparency=1,Visible=false,ZIndex=26})
+  R("s"..i.."a",{Size=V2(3,30),Position=V2(x+1,iy+4),Color=Theme.Primary,Transparency=1,Visible=false,ZIndex=27})
+  T("s"..i.."i",{Text=v[1],Size=18,Position=V2(x+s/2,iy+19),Color=C3r(170,178,210),Transparency=1,Visible=false,ZIndex=28,Center=true})
+  T("s"..i.."l",{Text=v[2],Size=13,Position=V2(x+s+12,iy+19),Color=C3r(170,178,210),Transparency=1,Visible=false,ZIndex=28})
+ end
 end
 
-local function MText(k, p)
-    M[k] = Drawing.new("Text")
-    for kk, vv in pairs(p) do M[k][kk] = vv end
-    return M[k]
+function InitHD()
+ local x,y,w=wx(),wy(),480;local s,hh=S.sw,40
+ R("hb",{Size=V2(w-s,hh),Position=V2(x+s,y),Color=C3r(10,12,28),Transparency=0.15,Visible=false,ZIndex=30})
+ R("hd",{Size=V2(w-s-20,1),Position=V2(x+s+10,y+hh),Color=Theme.Primary,Transparency=0.85,Visible=false,ZIndex=30})
+ T("ht",{Text="Hansz Hub",Size=16,Position=V2(x+s+14,y+hh/2),Color=Theme.White,Transparency=1,Visible=false,ZIndex=31})
+ T("hs",{Text="Premium",Size=10,Position=V2(x+s+100,y+hh/2),Color=Theme.Gray,Transparency=1,Visible=false,ZIndex=31})
 end
 
-local function MCircle(k, p)
-    M[k] = Drawing.new("Circle")
-    for kk, vv in pairs(p) do M[k][kk] = vv end
-    return M[k]
+function MC(pk,x,y,w,h,ft)
+ local cw,ch,g=(w-15)/2,70,10
+ for i=1,#ft do
+  local co,ro=(i-1)%2,math.floor((i-1)/2);local cx,cy=x+co*(cw+g),y+ro*(ch+g);local f=ft[i];local d=pk..i
+  R(d.."b",{Size=V2(cw,ch),Position=V2(cx,cy),Color=C3r(14,18,38),Transparency=0.2,Visible=false,ZIndex=45})
+  R(d.."r",{Size=V2(cw,ch),Position=V2(cx,cy),Color=C3r(30,35,60),Transparency=0.6,Visible=false,ZIndex=46,Thickness=1})
+  T(d.."i",{Text=f[1],Size=20,Position=V2(cx+22,cy+ch/2-6),Color=C3r(96,165,250),Transparency=1,Visible=false,ZIndex=47,Center=true})
+  T(d.."n",{Text=f[2],Size=13,Position=V2(cx+48,cy+18),Color=Theme.White,Transparency=1,Visible=false,ZIndex=47})
+  T(d.."d",{Text=f[3],Size=10,Position=V2(cx+48,cy+38),Color=C3r(110,118,155),Transparency=1,Visible=false,ZIndex=47})
+  T(d.."g",{Text=f[4]and"ON"or"OFF",Size=10,Position=V2(cx+cw-16,cy+ch/2),Color=f[4]and Theme.Success or C3r(80,80,80),Transparency=1,Visible=false,ZIndex=47,Center=true})
+  local tk=pk..f[2]
+  if S.tg[tk]==nil then S.tg[tk]={on=false}end
+  S.tg[tk].k=tk;S.tg[tk].d=d.."g";S.tg[tk].ax=cx+cw-31;S.tg[tk].ay=cy+ch/2-7
+ end
 end
 
-local function WX() return MenuSt.windowPos.X end
-local function WY() return MenuSt.windowPos.Y end
-local function WW() return MenuSt.windowSize.X end
-local function WH() return MenuSt.windowSize.Y end
-
--- ============================================================================
--- CREATE TOGGLE
--- ============================================================================
-function CreateToggle(tag, x, y, key)
-    local tw, th = 34, 20
-    if MenuSt.toggles[key] == nil then
-        MenuSt.toggles[key] = { on = false, slide = 0, targetSlide = 0 }
-    end
-    local ts = MenuSt.toggles[key]
-    MRect(tag.."tr", {Size=Vector2.new(tw,th), Position=Vector2.new(x,y), Color=Theme.Gray, Transparency=0.65, Visible=false, ZIndex=48})
-    MRect(tag.."gl", {Size=Vector2.new(tw+6,th+6), Position=Vector2.new(x-3,y-3), Color=Theme.Primary, Transparency=1, Visible=false, ZIndex=47})
-    MCircle(tag.."kn", {Radius=7, Position=Vector2.new(x+th/2,y+th/2), Color=Theme.White, Transparency=0.15, Visible=false, ZIndex=49, NumSides=20})
-    ts.draw = {tr=tag.."tr", gl=tag.."gl", kn=tag.."kn"}
-    ts.x, ts.y, ts.w, ts.h, ts.key = x, y, tw, th, key
+function CH(x,y,w,h)
+ T("h0",{Text="Welcome Back,",Size=22,Position=V2(x+w/2,y+20),Color=Theme.White,Transparency=1,Visible=false,ZIndex=40,Center=true})
+ T("h1",{Text="Hansz Hub Ready",Size=14,Position=V2(x+w/2,y+42),Color=Theme.PrimaryLight,Transparency=1,Visible=false,ZIndex=40,Center=true})
+ local st={{"V","Executor",Theme.Success},{"V","Loaded",Theme.Success},{"V","UI",Theme.Success},{"V","Secure",Theme.Success}}
+ local cw,ch=(w-30)/2,36
+ for i=1,4 do
+  local co,ro=(i-1)%2,math.floor((i-1)/2);local cx,cy=x+5+co*(cw+10),y+62+ro*(ch+8)
+  R("h"..i.."b",{Size=V2(cw,ch),Position=V2(cx,cy),Color=C3r(14,18,38),Transparency=0.2,Visible=false,ZIndex=40})
+  R("h"..i.."r",{Size=V2(cw,ch),Position=V2(cx,cy),Color=C3r(30,35,60),Transparency=0.6,Visible=false,ZIndex=41,Thickness=1})
+  T("h"..i.."n",{Text=st[i][1].." "..st[i][2],Size=13,Position=V2(cx+cw/2,cy+ch/2),Color=st[i][3],Transparency=1,Visible=false,ZIndex=42,Center=true})
+ end
 end
 
--- ============================================================================
--- CREATE WINDOW
--- ============================================================================
-function CreateWindow()
-    local wx, wy, ww, wh = WX(), WY(), WW(), WH()
-    MRect("winSh", {Size=Vector2.new(ww+8,wh+8), Position=Vector2.new(wx-4+4,wy-4+4), Color=Color3.new(0,0,0), Transparency=0.85, Visible=false, ZIndex=20})
-    MRect("winBg", {Size=Vector2.new(ww,wh), Position=Vector2.new(wx,wy), Color=Color3.fromRGB(6,8,22), Transparency=0.08, Visible=false, ZIndex=21})
-    MRect("winBrd", {Size=Vector2.new(ww,wh), Position=Vector2.new(wx,wy), Color=Color3.fromRGB(30,35,60), Transparency=0.55, Visible=false, ZIndex=22, Thickness=1})
-    MRect("winGlw", {Size=Vector2.new(ww+12,wh+12), Position=Vector2.new(wx-6,wy-6), Color=Theme.Primary, Transparency=0.92, Visible=false, ZIndex=19})
-    MRect("winHl", {Size=Vector2.new(ww-4,2), Position=Vector2.new(wx+2,wy+2), Color=Theme.Primary, Transparency=0.45, Visible=false, ZIndex=23})
+function CA(x,y,w,h)
+ T("a0",{Text="Hansz Hub",Size=24,Position=V2(x+w/2,y+28),Color=Theme.White,Transparency=1,Visible=false,ZIndex=55,Center=true})
+ T("a1",{Text="Premium v2.0",Size=13,Position=V2(x+w/2,y+55),Color=Theme.PrimaryLight,Transparency=1,Visible=false,ZIndex=55,Center=true})
+ T("a2",{Text="by Hansz Hub Team",Size=11,Position=V2(x+w/2,y+78),Color=Theme.Gray,Transparency=1,Visible=false,ZIndex=55,Center=true})
 end
 
--- ============================================================================
--- CREATE SIDEBAR
--- ============================================================================
-function CreateSidebar()
-    local wx, wy, ww, wh = WX(), WY(), WW(), WH()
-    local sw = MenuConfig.SidebarWidth
-    MRect("sb", {Size=Vector2.new(sw,wh), Position=Vector2.new(wx,wy), Color=Color3.fromRGB(8,10,24), Transparency=0.12, Visible=false, ZIndex=25})
-    MRect("sbd", {Size=Vector2.new(1,wh-10), Position=Vector2.new(wx+sw-1,wy+5), Color=Theme.Primary, Transparency=0.8, Visible=false, ZIndex=26})
-
-    local items = {{"⌂","Home"},{"▶","Main"},{"⚡","Player"},{"▣","Vehicle"},{"⊕","Teleport"},{"☰","Utility"},{"⚙","Settings"},{"ℹ","About"}}
-    M.si = {}
-    for i, v in ipairs(items) do
-        local iy = wy + 48 + (i-1) * 38
-        local idx = "si"..i
-        M.si[i] = {idx=idx, nm=v[2], ic=v[1], y=iy, ha=0, aa=0}
-        MRect(idx.."bg", {Size=Vector2.new(sw-4,34), Position=Vector2.new(wx+2,iy+2), Color=Color3.fromRGB(20,25,50), Transparency=1, Visible=false, ZIndex=26})
-        MRect(idx.."ac", {Size=Vector2.new(3,30), Position=Vector2.new(wx+1,iy+4), Color=Theme.Primary, Transparency=1, Visible=false, ZIndex=27})
-        MText(idx.."ic", {Text=v[1], Size=18, Position=Vector2.new(wx+sw/2,iy+19), Color=Color3.fromRGB(170,178,210), Transparency=1, Visible=false, ZIndex=28, Center=true})
-        MText(idx.."lb", {Text=v[2], Size=13, Position=Vector2.new(wx+sw+12,iy+19), Color=Color3.fromRGB(170,178,210), Transparency=1, Visible=false, ZIndex=28})
-    end
+function SW(t)
+ S.tb=t;  local p={Home={"h0","h1","h1b","h1r","h2b","h2r","h3b","h3r","h4b","h4r","h1n","h2n","h3n","h4n"},Main="M",Player="P",Settings="S",About={"a0","a1","a2"}}
+ for k,o in pairs(M)do if type(o)=="userdata"then o.Visible=false end end
+ for _,k in ipairs({"ws","wb","wd","wg","sb","sd","hb","hd","ht","hs"})do if M[k]then M[k].Visible=true end end
+ for i=1,5 do for _,s in ipairs({"b","a","i","l"})do if M["s"..i..s]then M["s"..i..s].Visible=true end end end
+ local v=p[t]
+ if type(v)=="table"then for _,k in ipairs(v)do if M[k]then M[k].Visible=true end end
+ else for k,o in pairs(M)do if type(o)=="userdata"and k:sub(1,1)==v then o.Visible=true end end end
 end
 
--- ============================================================================
--- CREATE HEADER
--- ============================================================================
-function CreateHeader()
-    local wx, wy, ww, wh = WX(), WY(), WW(), WH()
-    local sw, hh = MenuConfig.SidebarWidth, 40
-    MRect("hd", {Size=Vector2.new(ww-sw,hh), Position=Vector2.new(wx+sw,wy), Color=Color3.fromRGB(10,12,28), Transparency=0.15, Visible=false, ZIndex=30})
-    MRect("hdd", {Size=Vector2.new(ww-sw-20,1), Position=Vector2.new(wx+sw+10,wy+hh), Color=Theme.Primary, Transparency=0.85, Visible=false, ZIndex=30})
-    MText("hdT", {Text="Hansz Hub", Size=16, Position=Vector2.new(wx+sw+14,wy+hh/2), Color=Theme.White, Transparency=1, Visible=false, ZIndex=31})
-    MText("hdS", {Text="Premium Executor Script", Size=10, Position=Vector2.new(wx+sw+100,wy+hh/2), Color=Color3.fromRGB(110,118,155), Transparency=1, Visible=false, ZIndex=31})
-    local cx = wx + ww - 10
-    MText("mn", {Text="—", Size=16, Position=Vector2.new(cx-44,wy+hh/2), Color=Color3.fromRGB(110,118,155), Transparency=1, Visible=false, ZIndex=32, Center=true})
-    MText("mx", {Text="□", Size=14, Position=Vector2.new(cx-22,wy+hh/2), Color=Color3.fromRGB(110,118,155), Transparency=1, Visible=false, ZIndex=32, Center=true})
-    MText("cl", {Text="✕", Size=16, Position=Vector2.new(cx,wy+hh/2), Color=Color3.fromRGB(110,118,155), Transparency=1, Visible=false, ZIndex=32, Center=true})
+function TG(k)
+ local ts=S.tg[k];if not ts then return end;ts.on=not ts.on
+ if M[ts.d]then M[ts.d].Text=ts.on and"ON"or"OFF";M[ts.d].Color=ts.on and Theme.Success or C3r(80,80,80)end
 end
 
--- ============================================================================
--- CREATE HOME PAGE
--- ============================================================================
-function CreateHomePage(px, py, pw, ph)
-    MText("hmT", {Text="Welcome Back,", Size=22, Position=Vector2.new(px+pw/2,py+20), Color=Theme.White, Transparency=1, Visible=false, ZIndex=40, Center=true})
-    MText("hmS", {Text="Hansz Hub Ready", Size=14, Position=Vector2.new(px+pw/2,py+42), Color=Color3.fromRGB(96,165,250), Transparency=1, Visible=false, ZIndex=40, Center=true})
-    local status = {{"✔","Executor Connected",Theme.Success},{"✔","Script Loaded",Theme.Success},{"✔","UI Ready",Theme.Success},{"✔","Security Active",Theme.Success}}
-    local cw, ch = (pw-30)/2, 36
-    for i, v in ipairs(status) do
-        local col, row = (i-1)%2, math.floor((i-1)/2)
-        local cx, cy = px+5+col*(cw+10), py+62+row*(ch+8)
-        MRect("hc"..i.."bg", {Size=Vector2.new(cw,ch), Position=Vector2.new(cx,cy), Color=Color3.fromRGB(14,18,38), Transparency=0.2, Visible=false, ZIndex=40})
-        MRect("hc"..i.."br", {Size=Vector2.new(cw,ch), Position=Vector2.new(cx,cy), Color=Color3.fromRGB(30,35,60), Transparency=0.6, Visible=false, ZIndex=41, Thickness=1})
-        MText("hc"..i.."ic", {Text=v[1], Size=14, Position=Vector2.new(cx+16,cy+ch/2), Color=v[3], Transparency=1, Visible=false, ZIndex=42, Center=true})
-        MText("hc"..i.."tx", {Text=v[2], Size=12, Position=Vector2.new(cx+32,cy+ch/2), Color=Theme.White, Transparency=1, Visible=false, ZIndex=42})
-    end
+function SI()
+ local ok,u=pcall(function()return game:GetService("UserInputService")end)
+ if not ok then return end
+ u.InputBegan:Connect(function(i,g)if g then return end;if i.UserInputType==Enum.UserInputType.MouseButton1 then state.mC=true end end)
+ u.InputEnded:Connect(function(i,g)if g then return end;if i.UserInputType==Enum.UserInputType.MouseButton1 then state.mD=false;S.dr=false end end)
+ u.InputChanged:Connect(function(i,g)if g then return end;if i.UserInputType==Enum.UserInputType.MouseMovement then state.mPos=u:GetMouseLocation()end end)
 end
 
--- ============================================================================
--- CREATE FEATURE CARDS
--- ============================================================================
-function MakeCards(pageKey, px, py, pw, ph, features)
-    local cw, ch, gap = (pw-15)/2, 70, 10
-    M[pageKey.."Cd"] = {}
-    for i, feat in ipairs(features) do
-        local col, row = (i-1)%2, math.floor((i-1)/2)
-        local cx, cy = px+col*(cw+gap), py+row*(ch+gap)
-        local idx = pageKey.."c"..i
-        local tk = pageKey.."_"..feat.name
-        M[pageKey.."Cd"][i] = {x=cx, y=cy, w=cw, h=ch, nm=feat.name, tk=tk}
-        MRect(idx.."bg", {Size=Vector2.new(cw,ch), Position=Vector2.new(cx,cy), Color=Color3.fromRGB(14,18,38), Transparency=0.2, Visible=false, ZIndex=45})
-        MRect(idx.."br", {Size=Vector2.new(cw,ch), Position=Vector2.new(cx,cy), Color=Color3.fromRGB(30,35,60), Transparency=0.6, Visible=false, ZIndex=46, Thickness=1})
-        MRect(idx.."gl", {Size=Vector2.new(cw+4,ch+4), Position=Vector2.new(cx-2,cy-2), Color=Theme.Primary, Transparency=1, Visible=false, ZIndex=44})
-        MText(idx.."ic", {Text=feat.icon, Size=20, Position=Vector2.new(cx+22,cy+ch/2-6), Color=Color3.fromRGB(96,165,250), Transparency=1, Visible=false, ZIndex=47, Center=true})
-        MText(idx.."nm", {Text=feat.name, Size=13, Position=Vector2.new(cx+48,cy+18), Color=Theme.White, Transparency=1, Visible=false, ZIndex=47})
-        MText(idx.."ds", {Text=feat.desc, Size=10, Position=Vector2.new(cx+48,cy+38), Color=Color3.fromRGB(110,118,155), Transparency=1, Visible=false, ZIndex=47})
-        CreateToggle(idx.."tg", cx+cw-32, cy+ch/2-8, tk)
-    end
+function HC()
+ if not S.v then return end;local mx,my=state.mPos.X,state.mPos.Y
+ local x,y,w,h=wx(),wy(),480,340;local s,hh=S.sw,40
+ if pt(mx,my,x+s,y,w-s,hh)then S.dr=true;S.df=V2(mx-x,my-y)return end
+ for i=1,5 do local iy=y+48+(i-1)*38;if pt(mx,my,x+2,iy+2,s-4,34)then SW(S.si[i].n)return end end
+  for _,ts in pairs(S.tg)do local tx=ts.ax or 0;local ty=ts.ay or 0;if pt(mx,my,tx,ty,30,14)then TG(ts.k)return end end
 end
 
--- ============================================================================
--- CREATE PAGES
--- ============================================================================
-function CreatePages()
-    local wx, wy, ww, wh = WX(), WY(), WW(), WH()
-    local sw, hh, fh = MenuConfig.SidebarWidth, 40, 28
-    local px, py = wx+sw+10, wy+hh+8
-    local pw, ph = ww-sw-20, wh-hh-fh-16
-
-    CreateHomePage(px, py, pw, ph)
-    MakeCards("m", px, py, pw, ph, {
-        {icon="⚡", name="Auto Farm", desc="Auto collect & farm"},
-        {icon="📦", name="Auto Collect", desc="Auto collect items"},
-        {icon="💰", name="Auto Sell", desc="Auto sell items"},
-        {icon="⬆", name="Auto Upgrade", desc="Auto upgrade gear"},
-        {icon="👁", name="ESP", desc="See targets through walls"},
-        {icon="📍", name="Teleport", desc="Quick teleport mode"},
-        {icon="🛡", name="Auto Shield", desc="Auto activate shield"},
-        {icon="🎯", name="Auto Quest", desc="Auto complete quests"},
-    })
-    MakeCards("p", px, py, pw, ph, {
-        {icon="⚡", name="Speed Boost", desc="Increase walk speed"},
-        {icon="🛡", name="God Mode", desc="Become invincible"},
-        {icon="👁", name="Wall Hack", desc="See through walls"},
-        {icon="💨", name="Jump Power", desc="Super jump"},
-        {icon="🎯", name="Aimbot", desc="Auto aim at targets"},
-        {icon="🔄", name="Reset Char", desc="Respawn character"},
-    })
-    MakeCards("v", px, py, pw, ph, {
-        {icon="🚗", name="Car Spawn", desc="Spawn a vehicle"},
-        {icon="⚡", name="V-Speed", desc="Vehicle speed hack"},
-        {icon="🛩", name="Fly Mode", desc="Make vehicle fly"},
-        {icon="🔧", name="Auto Repair", desc="Auto repair vehicle"},
-        {icon="💎", name="Unlock All", desc="Unlock all vehicles"},
-        {icon="🎨", name="Custom Paint", desc="Change vehicle color"},
-    })
-    MakeCards("t", px, py, pw, ph, {
-        {icon="📍", name="TP Tool", desc="Click to teleport"},
-        {icon="🏠", name="To Spawn", desc="Teleport to spawn"},
-        {icon="⭐", name="Save Loc", desc="Save current pos"},
-        {icon="📋", name="Load Loc", desc="Load saved pos"},
-        {icon="🎲", name="Random TP", desc="Random teleport"},
-        {icon="🔄", name="Last Pos", desc="Go back to last pos"},
-    })
-    MakeCards("u", px, py, pw, ph, {
-        {icon="🔄", name="Rejoin", desc="Rejoin the server"},
-        {icon="🔐", name="Anti AFK", desc="Prevent auto kick"},
-        {icon="📊", name="FPS Boost", desc="Optimize performance"},
-        {icon="🔇", name="Mute Game", desc="Mute all sounds"},
-        {icon="🧹", name="Clear Debris", desc="Remove map debris"},
-        {icon="📁", name="Backup Cfg", desc="Save your settings"},
-    })
-    MakeCards("s", px, py, pw, ph, {
-        {icon="🎨", name="Theme", desc="Dark / Light mode"},
-        {icon="🔍", name="UI Scale", desc="Adjust interface size"},
-        {icon="⚡", name="Anim Speed", desc="Smooth / Fast"},
-        {icon="🌀", name="Blur", desc="Background blur effect"},
-        {icon="🔔", name="Notification", desc="Show notifications"},
-        {icon="🔊", name="Sound", desc="Toggle sound effects"},
-    })
-    CreateAboutPage(px, py, pw, ph)
+function HD()
+ if not S.dr then return end;local mx,my=state.mPos.X,state.mPos.Y;local d=S.df
+ S.w=V2(clamp(mx-d.X,10,CX*2-490),clamp(my-d.Y,10,CY*2-350))
 end
 
--- ============================================================================
--- CREATE ABOUT PAGE
--- ============================================================================
-function CreateAboutPage(px, py, pw, ph)
-    local cx = px + pw/2
-    MText("abTT", {Text="Hansz Hub", Size=26, Position=Vector2.new(cx,py+30), Color=Theme.White, Transparency=1, Visible=false, ZIndex=55, Center=true})
-    MText("abST", {Text="Premium Roblox Script", Size=13, Position=Vector2.new(cx,py+58), Color=Color3.fromRGB(96,165,250), Transparency=1, Visible=false, ZIndex=55, Center=true})
-    MText("abVR", {Text="Version 2.0.0", Size=12, Position=Vector2.new(cx,py+80), Color=Color3.fromRGB(110,118,155), Transparency=1, Visible=false, ZIndex=55, Center=true})
-    MText("abDV", {Text="Developer: Hansz Hub Team", Size=12, Position=Vector2.new(cx,py+102), Color=Color3.fromRGB(110,118,155), Transparency=1, Visible=false, ZIndex=55, Center=true})
-    MText("abCP", {Text="© 2024 Hansz Hub. All rights reserved.", Size=11, Position=Vector2.new(cx,py+124), Color=Color3.fromRGB(55,60,82), Transparency=1, Visible=false, ZIndex=55, Center=true})
+function UP()
+ local x,y,w,h=wx(),wy(),480,340;local s,hh=S.sw,40
+ if M.ws then M.ws.Position=V2(x-4,y-4)end
+ if M.wb then M.wb.Position=V2(x,y)end
+ if M.wd then M.wd.Position=V2(x,y)end
+ if M.wg then M.wg.Position=V2(x-6,y-6);M.wg.Transparency=0.9+math.sin(S.tm*0.5)*0.03 end
+ if M.sb then M.sb.Position=V2(x,y);M.sb.Size=V2(s,h)end
+ if M.sd then M.sd.Position=V2(x+s-1,y+5)end
+ for i=1,5 do local iy=y+48+(i-1)*38
+  if M["s"..i.."b"]then M["s"..i.."b"].Position=V2(x+2,iy+2);M["s"..i.."b"].Size=V2(s-4,34)end
+  if M["s"..i.."a"]then M["s"..i.."a"].Position=V2(x+1,iy+4)end
+  if M["s"..i.."i"]then M["s"..i.."i"].Position=V2(x+s/2,iy+19)end
+  if M["s"..i.."l"]then M["s"..i.."l"].Position=V2(x+s+12,iy+19)end
+ end
+ if M.hb then M.hb.Position=V2(x+s,y)end
+ if M.hd then M.hd.Position=V2(x+s+10,y+hh)end
+ if M.ht then M.ht.Position=V2(x+s+14,y+hh/2)end
+ if M.hs then M.hs.Position=V2(x+s+100,y+hh/2)end
 end
 
--- ============================================================================
--- CREATE SEARCH
--- ============================================================================
-function CreateSearch()
-    local wx, wy, ww = WX(), WY(), WW()
-    local sw, hh = MenuConfig.SidebarWidth, 40
-    local sx, sy = wx+sw+12, wy+hh+8
-    local sw2, sh2 = ww-sw-24, 28
-    MRect("srBg", {Size=Vector2.new(sw2,sh2), Position=Vector2.new(sx,sy), Color=Color3.fromRGB(12,15,32), Transparency=0.15, Visible=false, ZIndex=50})
-    MRect("srBr", {Size=Vector2.new(sw2,sh2), Position=Vector2.new(sx,sy), Color=Color3.fromRGB(30,35,60), Transparency=0.6, Visible=false, ZIndex=51, Thickness=1})
-    MRect("srGl", {Size=Vector2.new(sw2+6,sh2+6), Position=Vector2.new(sx-3,sy-3), Color=Theme.Primary, Transparency=1, Visible=false, ZIndex=49})
-    MText("srIc", {Text="⌕", Size=16, Position=Vector2.new(sx+14,sy+sh2/2), Color=Color3.fromRGB(110,118,155), Transparency=1, Visible=false, ZIndex=52, Center=true})
-    MText("srPh", {Text="Search Feature...", Size=12, Position=Vector2.new(sx+30,sy+sh2/2), Color=Color3.fromRGB(110,118,155), Transparency=0.5, Visible=false, ZIndex=52})
-    MText("srTx", {Text="", Size=12, Position=Vector2.new(sx+30,sy+sh2/2), Color=Theme.White, Transparency=1, Visible=false, ZIndex=52})
+function SMM()
+ DLO()
+ InitW();InitSB();InitHD()
+ local x,y,w,h=wx(),wy(),480,340;local s,hh=S.sw,40;local px,py,pw,ph=x+s+10,y+hh+8,w-s-20,h-hh-36
+ CH(px,py,pw,ph)
+ MC("M",px,py,pw,ph,{{"Z","Farm","Auto",false},{"=","Sell","Auto sell",false},{">","Upgrade","",false},{"@","ESP","See",false}})
+ MC("P",px,py,pw,ph,{{"!","Speed","Walk fast",false},{"@","God","Immortal",false},{">","Jump","High",false},{"#","Noclip","No clip",false}})
+ MC("S",px,py,pw,ph,{{"*","Theme","Dark mode",false},{">","Anim","Speed",false},{"!","Blur","Bg blur",false},{"@","Notif","On/off",false}})
+ CA(px,py,pw,ph)
+ S.v=true
+ for _,v in pairs(M)do if type(v)=="userdata"then pcall(function()v.Visible=true end)end end
+ local t=0
+ while t<0.5 do
+  local dt=task.wait(1/60);t=t+dt;local p=cubic(t/0.5)
+  for _,v in pairs(M)do if type(v)=="userdata"and v.Transparency~=nil then v.Transparency=1-p end end
+ end
+ for _,v in pairs(M)do if type(v)=="userdata"and v.Transparency~=nil then v.Transparency=0 end end
+ SW("Home");SI()
+ while true do
+  local dt=task.wait(1/60);S.tm=S.tm+dt
+  if state.mC then state.mC=false;HC()end
+  HD();UP()
+ end
 end
-
--- ============================================================================
--- CREATE FOOTER
--- ============================================================================
-function CreateFooter()
-    local wx, wy, ww, wh = WX(), WY(), WW(), WH()
-    local sw, fh = MenuConfig.SidebarWidth, 28
-    local fy = wy + wh - fh
-    MRect("ftBg", {Size=Vector2.new(ww-sw,fh), Position=Vector2.new(wx+sw,fy), Color=Color3.fromRGB(8,10,22), Transparency=0.2, Visible=false, ZIndex=30})
-    MRect("ftDv", {Size=Vector2.new(ww-sw-20,1), Position=Vector2.new(wx+sw+10,fy), Color=Theme.Primary, Transparency=0.85, Visible=false, ZIndex=30})
-    local labels = {"Executor: Synapse","FPS: 60","Ping: 15ms","v2.0.0","Status: ✔"}
-    for i, lbl in ipairs(labels) do
-        local segW = (ww-sw) / #labels
-        MText("fl"..i, {Text=lbl, Size=10, Position=Vector2.new(wx+sw+segW*(i-0.5),fy+fh/2), Color=Color3.fromRGB(110,118,155), Transparency=1, Visible=false, ZIndex=32, Center=true})
-    end
-end
-
--- ============================================================================
--- CREATE NOTIFICATION SYSTEM
--- ============================================================================
-function CreateNotifSystem()
-    M.notifObjs = {}
-end
-
--- ============================================================================
--- SHOW MENU NOTIFICATION
--- ============================================================================
-function ShowNotif(text, icon)
-    icon = icon or "✔"
-    local idx = #MenuSt.notifs + 1
-    local nw, nh = 200, 32
-    local nx, ny = S.X - nw - 12, 10 + (idx-1) * 38
-    local tag = "nf"..idx
-    local ns = {idx=idx, tag=tag, alpha=0, slide=0, timer=0, x=nx, y=ny, w=nw, h=nh, done=false}
-    table.insert(MenuSt.notifs, ns)
-    MRect(tag.."bg", {Size=Vector2.new(nw,nh), Position=Vector2.new(S.X+nw,ny), Color=Color3.fromRGB(14,18,38), Transparency=0.1, Visible=true, ZIndex=100})
-    MRect(tag.."br", {Size=Vector2.new(nw,nh), Position=Vector2.new(S.X+nw,ny), Color=Theme.Success, Transparency=0.5, Visible=true, ZIndex=101, Thickness=1})
-    MRect(tag.."gl", {Size=Vector2.new(nw+6,nh+6), Position=Vector2.new(S.X+nw-3,ny-3), Color=Theme.Success, Transparency=0.88, Visible=true, ZIndex=99})
-    MText(tag.."ic", {Text=icon, Size=14, Position=Vector2.new(S.X+nw+16,ny+nh/2), Color=Theme.Success, Transparency=1, Visible=true, ZIndex=102, Center=true})
-    MText(tag.."tx", {Text=text, Size=11, Position=Vector2.new(S.X+nw+34,ny+nh/2), Color=Theme.White, Transparency=1, Visible=true, ZIndex=102})
-    MRect(tag.."tm", {Size=Vector2.new(nw-6,2), Position=Vector2.new(S.X+nw+3,ny+nh-3), Color=Theme.Success, Transparency=1, Visible=true, ZIndex=102})
-end
-
--- ============================================================================
--- PAGE VISIBILITY PREFIXES
--- ============================================================================
-local PagePrefixes = {
-    Home     = {"hm", "hc"},
-    Main     = {"m"},
-    Player   = {"p"},
-    Vehicle  = {"v"},
-    Teleport = {"t"},
-    Utility  = {"u"},
-    Settings = {"s"},
-    About    = {"ab"},
-}
-
-local function IsPageTag(tag, prefixes)
-    for _, prefix in ipairs(prefixes) do
-        if tag:sub(1, #prefix:match("^%a+")) == prefix:match("^%a+") then
-            return true
-        end
-    end
-    return false
-end
-
--- Fixed tags that should always be visible
-local FixedTags = {
-    "winSh","winBg","winBrd","winGlw","winHl",
-    "sb","sbd","si1","si2","si3","si4","si5","si6","si7","si8",
-    "hd","hdd","hdT","hdS","mn","mx","cl",
-    "srBg","srBr","srGl","srIc","srPh","srTx",
-    "ftBg","ftDv", "fl1","fl2","fl3","fl4","fl5",
-    "nf",
-}
-
-local function ShowPage(name)
-    -- Hide all page-specific elements
-    for tag, obj in pairs(M) do
-        if type(obj) == "userdata" then
-            local isFixed = false
-            for _, ft in ipairs(FixedTags) do
-                if tag == ft or tag:sub(1, #ft) == ft then
-                    isFixed = true
-                    break
-                end
-            end
-            if not isFixed then
-                -- Check if it belongs to any page
-                for pn, prefixes in pairs(PagePrefixes) do
-                    if IsPageTag(tag, prefixes) then
-                        pcall(function() obj.Visible = false end)
-                        break
-                    end
-                end
-            end
-        end
-    end
-
-    -- Show only the active page elements
-    local activePrefixes = PagePrefixes[name]
-    if activePrefixes then
-        for tag, obj in pairs(M) do
-            if type(obj) == "userdata" then
-                if IsPageTag(tag, activePrefixes) then
-                    pcall(function() obj.Visible = true end)
-                end
-            end
-        end
-    end
-end
-
--- ============================================================================
--- SWITCH TAB
--- ============================================================================
-function SwitchTab(name)
-    MenuSt.activeTab = name
-    ShowPage(name)
-    ShowNotif("Switched to " .. name, "▶")
-end
-
--- ============================================================================
--- TOGGLE TOGGLE
--- ============================================================================
-function ToggleIt(key)
-    local ts = MenuSt.toggles[key]
-    if not ts then return end
-    ts.on = not ts.on
-    ts.targetSlide = ts.on and 1 or 0
-    ShowNotif(key.." "..(ts.on and "Enabled" or "Disabled"), ts.on and "✔" or "✕")
-end
-
--- ============================================================================
--- SHOW ALL MENU OBJECTS
--- ============================================================================
-local function ShowAllMenuObjs()
-    for _, v in pairs(M) do
-        if type(v) == "userdata" then
-            pcall(function() v.Visible = true end)
-        end
-    end
-end
-
--- ============================================================================
--- HIDE ALL MENU OBJECTS
--- ============================================================================
-local function HideAllMenuObjs()
-    for _, v in pairs(M) do
-        if type(v) == "userdata" then
-            pcall(function() v.Visible = false end)
-        end
-    end
-end
-
--- ============================================================================
--- ANIMATE MENU IN
--- ============================================================================
-function AnimateMenuIn()
-    MenuSt.visible = true
-    ShowAllMenuObjs()
-    local dur = MenuConfig.TransitionTime
-    local t = 0
-    while t < dur do
-        local dt = task.wait(1/60)
-        t = t + dt
-        local p = clamp(t / dur, 0, 1)
-        MenuSt.alpha = cubic(p)
-        MenuSt.scale = outBack(clamp(p * 1.1, 0, 1))
-        MenuSt.glowAlpha = clamp(p * 1.5, 0, 1)
-        for _, v in pairs(M) do
-            if type(v) == "userdata" and v.Transparency ~= nil then
-                v.Transparency = 1 - MenuSt.alpha
-            end
-        end
-    end
-    for _, v in pairs(M) do
-        if type(v) == "userdata" and v.Transparency ~= nil then
-            v.Transparency = 0
-        end
-    end
-end
-
--- ============================================================================
--- UPDATE TOGGLES
--- ============================================================================
-function UpdateTog(dt)
-    for _, ts in pairs(MenuSt.toggles) do
-        local d = ts.draw
-        if d then
-            ts.slide = lerp(ts.slide, ts.targetSlide, dt * 5)
-            local onVal = ts.slide
-            if M[d.tr] then
-                M[d.tr].Color = lerpC(Theme.Gray, Theme.Primary, onVal)
-            end
-            if M[d.kn] then
-                local kx = ts.x + ts.h/2 + (ts.w - ts.h) * onVal
-                M[d.kn].Position = Vector2.new(kx, ts.y + ts.h/2)
-            end
-            if M[d.gl] then
-                M[d.gl].Transparency = 0.85 + (1 - onVal) * 0.15
-            end
-        end
-    end
-end
-
--- ============================================================================
--- UPDATE SIDEBAR
--- ============================================================================
-function UpdateSide(dt)
-    local wx, sw = WX(), MenuConfig.SidebarWidth
-    for _, item in ipairs(M.si or {}) do
-        local isAct = MenuSt.activeTab == item.nm
-        local isHov = MenuSt.sidebarHoverItem == item.nm
-        item.ha = lerp(item.ha, isHov and 1 or 0, dt * 6)
-        item.aa = lerp(item.aa, isAct and 1 or 0, dt * 5)
-        if M[item.idx.."bg"] then M[item.idx.."bg"].Transparency = 1 - item.ha * 0.7 end
-        if M[item.idx.."ac"] then M[item.idx.."ac"].Transparency = 1 - item.aa end
-        if M[item.idx.."lb"] then
-            local la = clamp(item.ha + item.aa * 0.5, 0, 1)
-            M[item.idx.."lb"].Transparency = 1 - la * 0.85
-        end
-    end
-end
-
--- ============================================================================
--- UPDATE NOTIFICATIONS
--- ============================================================================
-function UpdateNotifs(dt)
-    local rem = {}
-    for i, n in ipairs(MenuSt.notifs) do
-        if n.done then table.insert(rem, i)
-        else
-            n.timer = n.timer + dt
-            if n.slide < 1 then n.slide = math.min(n.slide + dt * 3.5, 1) end
-            if n.alpha < 1 then n.alpha = math.min(n.alpha + dt * 4, 1) end
-            local sx = S.X + n.w - (S.X + n.w - n.x) * outBack(n.slide)
-            local tag = n.tag
-            for _, o in ipairs({"bg","br","gl"}) do
-                if M[tag..o] then M[tag..o].Position = Vector2.new(sx, n.y) end
-            end
-            if M[tag.."ic"] then M[tag.."ic"].Position = Vector2.new(sx+16, n.y+n.h/2) end
-            if M[tag.."tx"] then M[tag.."tx"].Position = Vector2.new(sx+34, n.y+n.h/2) end
-            if M[tag.."tm"] then M[tag.."tm"].Position = Vector2.new(sx+3, n.y+n.h-3) end
-            for _, o in ipairs({"bg","br","gl"}) do
-                if M[tag..o] then M[tag..o].Transparency = lerp(1, 0.12, n.alpha) end
-            end
-            if M[tag.."ic"] then M[tag.."ic"].Transparency = lerp(1, 0, n.alpha) end
-            if M[tag.."tx"] then M[tag.."tx"].Transparency = lerp(1, 0, n.alpha) end
-            if M[tag.."tm"] then
-                M[tag.."tm"].Transparency = lerp(1, 0.3, n.alpha)
-                local tp = 1 - (n.timer / MenuConfig.NotifDuration)
-                M[tag.."tm"].Size = Vector2.new(math.max((n.w-6)*tp, 0), 2)
-            end
-            if n.timer >= MenuConfig.NotifDuration then
-                n.alpha = n.alpha - dt * 4
-                if n.alpha <= 0 then
-                    for _, o in ipairs({"bg","br","gl","ic","tx","tm"}) do
-                        if M[tag..o] then pcall(function() M[tag..o]:Destroy() end); M[tag..o] = nil end
-                    end
-                    n.done = true
-                end
-            end
-        end
-    end
-    for i = #rem, 1, -1 do table.remove(MenuSt.notifs, rem[i]) end
-end
-
--- ============================================================================
--- UPDATE MENU POSITIONS
--- ============================================================================
-function UpdateMenuPos()
-    local wx, wy, ww, wh = WX(), WY(), WW(), WH()
-    local sw, hh, fh = MenuSt.sidebarAnimatedWidth, 40, 28
-
-    if M.winSh then M.winSh.Position = Vector2.new(wx-4+4,wy-4+4) end
-    if M.winBg then M.winBg.Position = Vector2.new(wx,wy) end
-    if M.winBrd then M.winBrd.Position = Vector2.new(wx,wy) end
-    if M.winGlw then M.winGlw.Position = Vector2.new(wx-6,wy-6); M.winGlw.Transparency = 0.9 + math.sin(MenuSt.time*0.5)*0.03 end
-    if M.winHl then M.winHl.Position = Vector2.new(wx+2,wy+2); M.winHl.Transparency = 0.4 + math.sin(MenuSt.time*0.7)*0.15 end
-
-    if M.sb then M.sb.Position = Vector2.new(wx,wy); M.sb.Size = Vector2.new(sw, wh) end
-    if M.sbd then M.sbd.Position = Vector2.new(wx+sw-1,wy+5) end
-    for _, item in ipairs(M.si or {}) do
-        local iy = wy + 48 + (tonumber(item.idx:match("%d+"))-1) * 38
-        if M[item.idx.."bg"] then M[item.idx.."bg"].Position = Vector2.new(wx+2, iy+2); M[item.idx.."bg"].Size = Vector2.new(sw-4, 34) end
-        if M[item.idx.."ac"] then M[item.idx.."ac"].Position = Vector2.new(wx+1, iy+4) end
-        if M[item.idx.."ic"] then M[item.idx.."ic"].Position = Vector2.new(wx+sw/2, iy+19) end
-        if M[item.idx.."lb"] then M[item.idx.."lb"].Position = Vector2.new(wx+sw+12, iy+19) end
-    end
-
-    if M.hd then M.hd.Position = Vector2.new(wx+sw,wy) end
-    if M.hdd then M.hdd.Position = Vector2.new(wx+sw+10,wy+hh) end
-    if M.hdT then M.hdT.Position = Vector2.new(wx+sw+14,wy+hh/2) end
-    if M.hdS then M.hdS.Position = Vector2.new(wx+sw+100,wy+hh/2) end
-    local cx = wx + ww - 10
-    if M.mn then M.mn.Position = Vector2.new(cx-44,wy+hh/2) end
-    if M.mx then M.mx.Position = Vector2.new(cx-22,wy+hh/2) end
-    if M.cl then M.cl.Position = Vector2.new(cx,wy+hh/2) end
-
-    local sx, sy = wx+sw+12, wy+hh+8
-    local sw2, sh2 = ww-sw-24, 28
-    if M.srBg then M.srBg.Position = Vector2.new(sx,sy) end
-    if M.srBr then M.srBr.Position = Vector2.new(sx,sy) end
-    if M.srGl then M.srGl.Position = Vector2.new(sx-3,sy-3) end
-    if M.srIc then M.srIc.Position = Vector2.new(sx+14,sy+sh2/2) end
-    if M.srPh then M.srPh.Position = Vector2.new(sx+30,sy+sh2/2) end
-    if M.srTx then M.srTx.Position = Vector2.new(sx+30,sy+sh2/2) end
-
-    local fy = wy + wh - fh
-    if M.ftBg then M.ftBg.Position = Vector2.new(wx+sw,fy) end
-    if M.ftDv then M.ftDv.Position = Vector2.new(wx+sw+10,fy) end
-    local labels = {"Executor: Synapse","FPS: "..tostring(math.floor(60+math.sin(MenuSt.time*0.5)*2)),"Ping: "..tostring(math.floor(15+math.sin(MenuSt.time*0.7)*3)).."ms","v2.0.0","Status: ✔"}
-    for i, lbl in ipairs(labels) do
-        local segW = (ww-sw) / 5
-        if M["fl"..i] then M["fl"..i].Position = Vector2.new(wx+sw+segW*(i-0.5),fy+fh/2); M["fl"..i].Text = lbl end
-    end
-end
-
--- ============================================================================
--- UPDATE MENU
--- ============================================================================
-function UpdateMenu(dt)
-    MenuSt.time = MenuSt.time + dt
-    if not MenuSt.visible then return end
-    AnimateBackground(dt)
-    -- Animate sidebar width
-    MenuSt.sidebarAnimatedWidth = lerp(MenuSt.sidebarAnimatedWidth, MenuSt.sidebarTargetWidth, dt * 6)
-    UpdateMenuPos()
-    UpdateTog(dt)
-    UpdateSide(dt)
-    UpdateNotifs(dt)
-end
-
--- ============================================================================
--- SETUP INPUT
--- ============================================================================
-local inputSetupDone = false
-function SetupInput()
-    if inputSetupDone then return end
-    inputSetupDone = true
-    local ok, UIS = pcall(function() return game:GetService("UserInputService") end)
-    if not ok then return end
-    UIS.InputBegan:Connect(function(input, gpe)
-        if gpe then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            state.mouseDown = true
-            state.mouseClicked = true
-        end
-    end)
-    UIS.InputEnded:Connect(function(input, gpe)
-        if gpe then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            state.mouseDown = false
-            MenuSt.dragging = false
-        end
-    end)
-    UIS.InputChanged:Connect(function(input, gpe)
-        if gpe then return end
-        if input.UserInputType == Enum.UserInputType.MouseMovement then
-            state.mousePos = UIS:GetMouseLocation()
-        end
-    end)
-end
-
--- ============================================================================
--- HANDLE CLICK
--- ============================================================================
-function HandleClick()
-    if not MenuSt.visible then return end
-    local mx, my = state.mousePos.X, state.mousePos.Y
-    local wx, wy, ww, wh = WX(), WY(), WW(), WH()
-    local sw, hh = MenuSt.sidebarAnimatedWidth, 40
-
-    -- Drag header
-    if PtIn(mx, my, wx+sw, wy, ww-sw, hh) then
-        MenuSt.dragging = true
-        MenuSt.dragOffset = Vector2.new(mx-wx, my-wy)
-        return
-    end
-    -- Close button
-    local cx, cy = wx+ww-10, wy+hh/2
-    if math.abs(mx-cx) < 12 and math.abs(my-cy) < 12 then
-        return
-    end
-    -- Sidebar
-    for _, item in ipairs(M.si or {}) do
-        local iy = wy + 48 + (tonumber(item.idx:match("%d+"))-1) * 38
-        if PtIn(mx, my, wx+2, iy+2, sw-4, 34) then
-            SwitchTab(item.nm)
-            return
-        end
-    end
-    -- Toggles
-    for _, ts in pairs(MenuSt.toggles) do
-        if PtIn(mx, my, ts.x, ts.y, ts.w, ts.h) then
-            ToggleIt(ts.key)
-            return
-        end
-    end
-end
-
--- ============================================================================
--- HANDLE HOVER
--- ============================================================================
-function HandleHover()
-    if not MenuSt.visible then return end
-    local mx, my = state.mousePos.X, state.mousePos.Y
-    local wx, wy = WX(), WY()
-    local sw = MenuSt.sidebarAnimatedWidth
-
-    -- Sidebar area hover (expand)
-    MenuSt.sidebarHover = PtIn(mx, my, wx, wy, sw, WH())
-    MenuSt.sidebarTargetWidth = MenuSt.sidebarHover and MenuConfig.SidebarExpanded or MenuConfig.SidebarWidth
-
-    -- Sidebar item hover
-    MenuSt.sidebarHoverItem = nil
-    for _, item in ipairs(M.si or {}) do
-        local iy = wy + 48 + (tonumber(item.idx:match("%d+"))-1) * 38
-        if PtIn(mx, my, wx+2, iy+2, sw-4, 34) then
-            MenuSt.sidebarHoverItem = item.nm
-            break
-        end
-    end
-end
-
--- ============================================================================
--- DRAG HANDLING
--- ============================================================================
-function HandleDrag()
-    if not MenuSt.dragging then return end
-    local mx, my = state.mousePos.X, state.mousePos.Y
-    local doff = MenuSt.dragOffset
-    MenuSt.windowPos = Vector2.new(
-        clamp(mx - doff.X, 10, S.X - WW() - 10),
-        clamp(my - doff.Y, 10, S.Y - WH() - 10)
-    )
-end
-
--- ============================================================================
--- MENU UPDATE LOOP
--- ============================================================================
-local menuRunning = false
-function MenuLoop()
-    if menuRunning then return end
-    menuRunning = true
-    state.menuRunning = true
-    SetupInput()
-    while state.menuRunning do
-        local dt = task.wait(1/60)
-        if state.mouseClicked then
-            state.mouseClicked = false
-            HandleClick()
-        end
-        HandleDrag()
-        HandleHover()
-        UpdateMenu(dt)
-    end
-    DestroyMenu()
-end
-
--- ============================================================================
--- DESTROY MENU
--- ============================================================================
-function DestroyMenu()
-    for _, v in pairs(M) do
-        if type(v) == "userdata" then pcall(function() v:Destroy() end)
-        elseif type(v) == "table" then
-            for _, sub in pairs(v) do if type(sub) == "userdata" then pcall(function() sub:Destroy() end) end end
-        end
-    end
-    for k in pairs(M) do M[k] = nil end
-end
-
--- ============================================================================
--- START MAIN MENU (called after loading completes)
--- ============================================================================
-function StartMainMenu()
-    DestroyLoadingOnly()
-    CreateWindow()
-    CreateSidebar()
-    CreateHeader()
-    CreatePages()
-    CreateSearch()
-    CreateFooter()
-    CreateNotifSystem()
-    ShowNotif("Hansz Hub Loaded Successfully", "✔")
-    AnimateMenuIn()
-    ShowPage("Home")
-    ShowNotif("Menu Ready - Premium Mode", "✔")
-    MenuLoop()
-end
-
 -- ============================================================================
 -- MAIN EXECUTION
 -- ============================================================================
@@ -1857,17 +1205,15 @@ while state.running do
     end
     UpdateFrame(dt)
 
-    -- Transition to menu when loading finishes
     if state.menuPhase == 2 and not state.menuCreated then
         state.menuCreated = true
         break
     end
 end
 
--- Start menu directly (keeps main thread alive) or cleanup
 if state.menuCreated then
     task.wait(0.3)
-    StartMainMenu()
+    SMM()
 else
     DestroyLoader()
 end
