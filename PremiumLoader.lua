@@ -958,15 +958,14 @@ function UpdateFrame(dt)
             end
 
             if fp >= 1 then
-                state.running = false
+                state.mP = 2
             end
         end
     end
 
-    mP=0,mC=false,mo=V2(0,0),md=false,mc=false,
     -- Notification animation
-    if state.notification.active then
-        local n = state.notification
+    if state.notif and state.notif.active then
+        local n = state.notif
         n.timer = n.timer + dt
 
         if n.slide < 1 then
